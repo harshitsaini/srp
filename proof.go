@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"fmt"
+	"math/big"
 )
 
 /*
@@ -40,6 +41,16 @@ func (s *SRP) M(salt []byte, uname string) ([]byte, error) {
 	uHash := sha256.Sum256([]byte(uname))
 	h := sha256.New()
 
+	fmt.Printf("Debug H_N: %v\n", new(big.Int).SetBytes(nHash[:]))
+	fmt.Printf("Debug g_N: %v\n", new(big.Int).SetBytes(gHash[:]))
+	fmt.Printf("Debug H_N^H_g: %v\n", new(big.Int).SetBytes(groupXOR[:]))
+	fmt.Printf("Debug H_I: %v\n", new(big.Int).SetBytes(uHash[:]))
+	fmt.Printf("Debug salt: %v\n", new(big.Int).SetBytes(salt[:]))
+	fmt.Printf("Debug client public: %v\n", s.ephemeralPublicA)
+	fmt.Printf("Debug server_public: %v\n", s.ephemeralPublicB)
+	fmt.Printf("Debug sessionKey: %v\n", new(big.Int).SetBytes(s.key))
+	// fmt.Printf("Debug H_N: %v\n", nHash)
+
 	if _, err := h.Write(groupXOR); err != nil {
 		return nil, fmt.Errorf("failed to write group xor to hasher: %w", err)
 	}
@@ -60,29 +71,62 @@ func (s *SRP) M(salt []byte, uname string) ([]byte, error) {
 	}
 
 	s.m = h.Sum(nil)
+	fmt.Printf("Debug prove: %v\n", new(big.Int).SetBytes(s.m))
 	return s.m, nil
 }
 
 // GoodServerProof takes the post-key negotiation proof from the server
 // and compares it with what we (the client) think it should be.
 func (s *SRP) GoodServerProof(salt []byte, uname string, proof []byte) bool {
-	myM, err := s.M(salt, uname)
-	if err != nil {
-		// well that's odd. Better return false if something is wrong here
-		s.isServerProved = false
-		return false
-	}
-	s.isServerProved = subtle.ConstantTimeCompare(myM, proof) == 1
-	return s.isServerProved
+
+	// TODO
+
+	return false
+
+	// myM, err := s.M(salt, uname)
+	// if err != nil {
+	// 	// well that's odd. Better return false if something is wrong here
+	// 	s.isServerProved = false
+	// 	return false
+	// }
+	// s.isServerProved = subtle.ConstantTimeCompare(myM, proof) == 1
+	// return s.isServerProved
 }
 
 // ClientProof constructs the clients proof from which it knows the key.
-func (s *SRP) ClientProof() ([]byte, error) {
-	if !s.isServer && !s.isServerProved {
-		return nil, fmt.Errorf("don't construct client proof until server is proved")
-	}
-	if s.cProof != nil {
-		return s.cProof, nil
+// func (s *SRP) ClientProof() ([]byte, error) {
+// 	if !s.isServer && !s.isServerProved {
+// 		return nil, fmt.Errorf("don't construct client proof until server is proved")
+// 	}
+// 	if s.cProof != nil {
+// 		return s.cProof, nil
+// 	}
+
+// 	if s.ephemeralPublicA == nil || s.m == nil || s.key == nil {
+// 		return nil, fmt.Errorf("not enough pieces in place to construct client proof")
+// 	}
+// 	h := sha256.New()
+// 	_, err := h.Write(s.ephemeralPublicA.Bytes())
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to write A to hasher: %w", err)
+// 	}
+// 	_, err = h.Write(s.m)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to write M to hasher: %w", err)
+// 	}
+// 	_, err = h.Write(s.key)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to write key to hasher: %w", err)
+// 	}
+// 	s.cProof = h.Sum(nil)
+// 	return s.cProof, nil
+// }
+
+// ServerProof constructs the server proof from which it knows the key.
+func (s *SRP) ServerProof() ([]byte, error) {
+
+	if s.sProof != nil {
+		return s.sProof, nil
 	}
 
 	if s.ephemeralPublicA == nil || s.m == nil || s.key == nil {
@@ -101,13 +145,21 @@ func (s *SRP) ClientProof() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to write key to hasher: %w", err)
 	}
-	s.cProof = h.Sum(nil)
-	return s.cProof, nil
+	s.sProof = h.Sum(nil)
+	return s.sProof, nil
 }
 
-// GoodClientProof returns true if the given proof is the same as what we calculate.
-func (s *SRP) GoodClientProof(proof []byte) bool {
-	myCP, err := s.ClientProof()
+// // GoodClientProof returns true if the given proof is the same as what we calculate.
+// func (s *SRP) GoodClientProof(proof []byte) bool {
+// 	myCP, err := s.ClientProof()
+// 	if err != nil {
+// 		return false
+// 	}
+// 	return subtle.ConstantTimeCompare(myCP, proof) == 1
+// }
+
+func (s *SRP) GoodClientProof(salt []byte, uname string, proof []byte) bool {
+	myCP, err := s.M(salt, uname)
 	if err != nil {
 		return false
 	}

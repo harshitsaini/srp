@@ -69,6 +69,7 @@ type SRP struct {
 	badState         bool
 	hashName         string // Hash used for constructing k and u
 	stdPadding       bool   // Whether to use RFC5054 PAD for creation of k and u
+	sProof           []byte
 }
 
 var (
@@ -113,10 +114,12 @@ func NewSRPServer(group *Group, v, k *big.Int) *SRP {
 // v is the server's SRP verifier.
 // Returns nil on error.
 func NewServerStd(group *Group, v *big.Int) *SRP {
+	fmt.Println("NewServerStd init !")
 	return newSRP(true, group, v, nil, true)
 }
 
 func newSRP(isServer bool, group *Group, xORv, k *big.Int, std bool) *SRP {
+	fmt.Println("SRP init !")
 	s := &SRP{
 		// Setting these to Int-zero gives me a useful way to test
 		// if these have been properly set later
@@ -139,6 +142,7 @@ func newSRP(isServer bool, group *Group, xORv, k *big.Int, std bool) *SRP {
 		cProof:         nil,
 		isServerProved: false,
 		stdPadding:     std,
+		sProof:         nil,
 	}
 
 	if s.isServer {
@@ -157,17 +161,18 @@ func newSRP(isServer bool, group *Group, xORv, k *big.Int, std bool) *SRP {
 	} else {
 		s.k.Set(k)
 	}
+	fmt.Printf("k(Multiplier) %v %v\n", s.k, s.stdPadding)
 
-	s.generateMySecret()
-	if s.isServer {
-		if _, err := s.makeB(); err != nil {
-			return nil
-		}
-	} else {
-		if _, err := s.makeA(); err != nil {
-			return nil
-		}
-	}
+	// s.generateMySecret()
+	// if s.isServer {
+	// 	if _, err := s.makeB(); err != nil {
+	// 		return nil
+	// 	}
+	// } else {
+	// 	if _, err := s.makeA(); err != nil {
+	// 		return nil
+	// 	}
+	// }
 	return s
 }
 
@@ -196,6 +201,10 @@ func (s *SRP) EphemeralPublic() *big.Int {
 	return s.ephemeralPublicA
 }
 
+func (s *SRP) EphemeralPrivate() *big.Int {
+	return s.ephemeralPrivate
+}
+
 /*
 IsPublicValid checks to see whether public A or B is valid within the group.
 
@@ -207,6 +216,8 @@ than using SetOthersPublic(), which also performs this check.
 //nolint:gocritic // A != a. Case matters
 func (s *SRP) IsPublicValid(AorB *big.Int) bool {
 	// We assume that we have a good s.group
+
+	// fmt.Printf("AorB: %v", AorB)
 
 	if s.group.Reduce(AorB).Cmp(bigOne) == 0 {
 		return false
@@ -299,6 +310,9 @@ func (s *SRP) Key() ([]byte, error) {
 			return nil, fmt.Errorf("failed to calculate u: %w", err)
 		}
 	}
+
+	fmt.Printf("Common secret: %v\n", s.u)
+
 	// We must refuse to calculate Key when u == 0
 	if !s.isUValid() {
 		s.badState = true
@@ -335,11 +349,14 @@ func (s *SRP) Key() ([]byte, error) {
 
 	s.premasterKey.Exp(b, e, s.group.n)
 
+	fmt.Printf("Premaster secret (S): %v\n", s.premasterKey)
+
 	h := Hash.NewWith(s.hashName)
 	if h == nil {
 		return nil, fmt.Errorf("failed to set up hash function")
 	}
-	if _, err := h.Write([]byte(fmt.Sprintf("%x", s.premasterKey))); err != nil {
+	fmt.Printf("Debug Premaster test: %v", fmt.Sprintf("%x", s.premasterKey))
+	if _, err := h.Write(s.premasterKey.Bytes()); err != nil {
 		return nil, fmt.Errorf("failed to write premasterKey to hasher: %w", err)
 	}
 

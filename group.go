@@ -81,10 +81,15 @@ func (g *Group) computeK(h hash.Hash) (*big.Int, error) {
 func (g *Group) PaddedBytes(x *big.Int) []byte {
 	reducedX := (&big.Int{}).Mod(x, g.n)
 
+	// fmt.Printf("reducedX: %v\n", reducedX)
+
 	// Get N and x as byte arrays, with x zero padded to be same size as N
 	NBytes := g.n.Bytes()
 	xBytes := make([]byte, len(NBytes))
 	xBytes = reducedX.FillBytes(xBytes)
+
+	// fmt.Printf("NBytes: %v\n", NBytes)
+	// fmt.Printf("xBytes: %v\n", xBytes)
 
 	return xBytes
 }

@@ -32,7 +32,29 @@ func (s *SRP) generateMySecret() *big.Int {
 	ephemeralPrivate := &big.Int{}
 	ephemeralPrivate.SetBytes(bytes)
 	s.ephemeralPrivate = ephemeralPrivate
+	fmt.Printf("eSize %v\nephemeralPrivate: %v", eSize, ephemeralPrivate)
 	return s.ephemeralPrivate
+}
+
+// generateMySecret creates the little a or b
+// According to RFC 5054, this should be at least 32 bytes
+// According to RFC 2631 this should be uniform in the range
+// [2, q-2], where q is the Sophie Germain prime from which
+// N was created.
+// According to RFC 3526 §8 there are some specific sizes depending
+// on the group. We go with RFC 3526 values if available, otherwise
+// a minimum of 32 bytes.
+func (s *SRP) SetMySecret(secret *big.Int) error {
+	s.ephemeralPrivate.Set(secret)
+	fmt.Printf("Try secret %v\n", secret)
+	fmt.Printf("Try s.ephemeralPrivate %v\n", s.ephemeralPrivate)
+	_, err := s.makeB()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // setHashName allows set something other than "sha256". Please don't.
@@ -133,6 +155,7 @@ func (s *SRP) makeB() (*big.Int, error) {
 		}
 	}
 	if s.group.IsZero(s.ephemeralPrivate) {
+		fmt.Printf("\n\nThis was triggered !!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
 		s.ephemeralPrivate = s.generateMySecret()
 	}
 
@@ -231,6 +254,9 @@ func (s *SRP) calculateUStd() (*big.Int, error) {
 	B := grp.PaddedBytes(s.ephemeralPublicB)
 
 	h := Hash.NewWith(s.hashName)
+
+	fmt.Printf("Hash used is: %v\n", s.hashName)
+
 	if h == nil {
 		return nil, fmt.Errorf("failed to set up hash function")
 	}
